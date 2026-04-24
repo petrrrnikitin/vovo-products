@@ -1,15 +1,25 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Api;
 
+use App\Contracts\Search\ProductSearchInterface;
+use App\Exceptions\SearchException;
 use App\Http\Requests\ProductFilterRequest;
 use App\Http\Resources\ProductResource;
-use App\Models\Product;
+use App\Http\Transformers\ProductSearchFiltersTransformer;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use OpenApi\Attributes as OA;
 
 class ProductController extends Controller
 {
+    public function __construct(
+        private readonly ProductSearchInterface $search,
+        private readonly ProductSearchFiltersTransformer $transformer,
+    ) {}
+
     #[OA\Get(
         path: '/api/products',
         summary: 'Поиск товаров с фильтрами и сортировкой',
@@ -74,6 +84,13 @@ class ProductController extends Controller
                 required: false,
                 schema: new OA\Schema(type : 'integer', maximum : 100, minimum : 1),
             ),
+            new OA\Parameter(
+                name: 'cursor',
+                description: 'Курсор для перехода на следующую/предыдущую страницу',
+                in: 'query',
+                required: false,
+                schema: new OA\Schema(type: 'string'),
+            ),
         ],
         responses: [
             new OA\Response(
@@ -106,8 +123,6 @@ class ProductController extends Controller
                         new OA\Property(
                             property: 'links',
                             properties: [
-                                new OA\Property(property: 'first', type: 'string', nullable: true),
-                                new OA\Property(property: 'last', type: 'string', nullable: true),
                                 new OA\Property(property: 'prev', type: 'string', nullable: true),
                                 new OA\Property(property: 'next', type: 'string', nullable: true),
                             ],
@@ -116,12 +131,10 @@ class ProductController extends Controller
                         new OA\Property(
                             property: 'meta',
                             properties: [
-                                new OA\Property(property: 'current_page', type: 'integer'),
-                                new OA\Property(property: 'from', type: 'integer', nullable: true),
-                                new OA\Property(property: 'last_page', type: 'integer'),
+                                new OA\Property(property: 'path', type: 'string'),
                                 new OA\Property(property: 'per_page', type: 'integer'),
-                                new OA\Property(property: 'to', type: 'integer', nullable: true),
-                                new OA\Property(property: 'total', type: 'integer'),
+                                new OA\Property(property: 'next_cursor', type: 'string', nullable: true),
+                                new OA\Property(property: 'prev_cursor', type: 'string', nullable: true),
                             ],
                             type: 'object',
                         ),
@@ -129,13 +142,17 @@ class ProductController extends Controller
                 ),
             ),
             new OA\Response(response: 422, description: 'Ошибка валидации'),
+            new OA\Response(response: 500, description: 'Внутренняя ошибка сервера'),
         ],
     )]
-    public function index(ProductFilterRequest $request): AnonymousResourceCollection
+    public function index(ProductFilterRequest $request): AnonymousResourceCollection|JsonResponse
     {
-        $products = Product::with('category')
-            ->paginate($request->integer('per_page', 20));
-
-        return ProductResource::collection($products);
+        try {
+            return ProductResource::collection(
+                $this->search->search($this->transformer->fromRequest($request))
+            );
+        } catch (SearchException) {
+            return response()->json(['message' => 'Внутренняя ошибка сервера'], 500);
+        }
     }
 }

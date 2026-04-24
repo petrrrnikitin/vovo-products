@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use Database\Factories\ProductFactory;
@@ -23,9 +25,9 @@ class Product extends Model
     protected function casts(): array
     {
         return [
-            'price'    => 'decimal:2',
+            'price' => 'decimal:2',
             'in_stock' => 'boolean',
-            'rating'   => 'float',
+            'rating' => 'float',
         ];
     }
 
