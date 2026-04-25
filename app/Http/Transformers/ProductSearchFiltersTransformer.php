@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Transformers;
 
-use App\DTO\ProductSearchFilters;
+use App\Search\DTO\ProductSearchFilters;
 use App\Http\Requests\ProductFilterRequest;
 
 final class ProductSearchFiltersTransformer
@@ -20,6 +20,7 @@ final class ProductSearchFiltersTransformer
             ratingFrom : $request->filled('rating_from') ? $request->float('rating_from') : null,
             sort : $request->string('sort')->value() ?: null,
             perPage : $request->integer('per_page', 20),
+            cursor : $request->string('cursor')->value() ?: null,
         );
     }
 }

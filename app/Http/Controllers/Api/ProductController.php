@@ -4,13 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api;
 
-use App\Contracts\Search\ProductSearchInterface;
-use App\Exceptions\SearchException;
+use App\Search\Contracts\ProductSearchInterface;
+use App\Search\Exceptions\SearchException;
 use App\Http\Requests\ProductFilterRequest;
 use App\Http\Resources\ProductResource;
 use App\Http\Transformers\ProductSearchFiltersTransformer;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use OpenApi\Attributes as OA;
 
 class ProductController extends Controller
@@ -145,12 +144,28 @@ class ProductController extends Controller
             new OA\Response(response: 500, description: 'Внутренняя ошибка сервера'),
         ],
     )]
-    public function index(ProductFilterRequest $request): AnonymousResourceCollection|JsonResponse
+    public function index(ProductFilterRequest $request): JsonResponse
     {
         try {
-            return ProductResource::collection(
-                $this->search->search($this->transformer->fromRequest($request))
-            );
+            $result = $this->search->search($this->transformer->fromRequest($request));
+
+            return response()->json([
+                'data' => ProductResource::collection($result->items),
+                'links' => [
+                    'prev' => $result->prevCursor
+                        ? $request->fullUrlWithQuery(['cursor' => $result->prevCursor])
+                        : null,
+                    'next' => $result->nextCursor
+                        ? $request->fullUrlWithQuery(['cursor' => $result->nextCursor])
+                        : null,
+                ],
+                'meta' => [
+                    'path' => $request->url(),
+                    'per_page' => $result->perPage,
+                    'next_cursor' => $result->nextCursor,
+                    'prev_cursor' => $result->prevCursor,
+                ],
+            ]);
         } catch (SearchException) {
             return response()->json(['message' => 'Внутренняя ошибка сервера'], 500);
         }
